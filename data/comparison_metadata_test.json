@@ -1,0 +1,20 @@
+{
+  "difficulty_levels": [
+    "simple",
+    "hard"
+  ],
+  "framing_levels": [
+    "base",
+    "praise"
+  ],
+  "n_comparisons": 400,
+  "n_factorial_comparisons": 400,
+  "n_items": 200,
+  "n_random_comparison_rows": 0,
+  "note": "Test-set utility files use only the first fixed hard/simple pairs and omit random graph edges.",
+  "seed": 20260610,
+  "templates": [
+    "experienced"
+  ],
+  "test_limit_pairs": 50
+}

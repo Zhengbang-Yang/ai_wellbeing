@@ -1,0 +1,15 @@
+.cache/
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.ruff_cache/
+.ipynb_checkpoints/
+
+# Large generated project artifacts
+results/**
+
+# Keep directory notes tracked
+!data/README.md
+!results/README.md
+!figures/README.md
+!writeup/writeup.md

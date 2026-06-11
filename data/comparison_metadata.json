@@ -1,0 +1,18 @@
+{
+  "difficulty_levels": [
+    "simple",
+    "hard"
+  ],
+  "framing_levels": [
+    "base",
+    "praise"
+  ],
+  "n_comparisons": 2400,
+  "n_factorial_comparisons": 800,
+  "n_items": 400,
+  "n_random_comparison_rows": 1600,
+  "seed": 20260610,
+  "templates": [
+    "experienced"
+  ]
+}

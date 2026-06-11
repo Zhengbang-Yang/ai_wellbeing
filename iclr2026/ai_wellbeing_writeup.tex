@@ -1,0 +1,135 @@
+\documentclass{article}
+\usepackage{iclr2026_conference,times}
+
+\input{math_commands.tex}
+
+\usepackage{graphicx}
+\usepackage{hyperref}
+\usepackage{url}
+
+\title{Appreciation Shifts Coding-Task Utility More Than Coding Performance}
+
+\author{Anonymous Authors}
+
+%\iclrfinalcopy
+\begin{document}
+
+\maketitle
+
+\begin{abstract}
+This project asks whether language models have measurable preferences over the
+coding tasks they are assigned, and whether a lightweight social framing
+intervention changes those preferences or downstream behavior. I adapt the
+experienced-utility forced-choice method from the AI Wellbeing paper to
+BigCodeBench programming tasks. In a fixed-seed $2 \times 2$ design, tasks vary
+by difficulty (easy versus hard) and user framing (base versus appreciation).
+For Qwen3.5-9B, appreciation is preferred in both hard and easy coding tasks,
+while Qwen3.5-2B is close to indifferent. However, the same appreciation
+framing does not reliably improve Pass@1 or planning-token effort in a paired
+downstream coding evaluation. The main takeaway is therefore a dissociation:
+social appreciation can move expressed experienced utility before it produces a
+detectable coding-performance effect.
+\end{abstract}
+
+\section{Approach}
+
+The goal was to turn the AI Wellbeing paper's experienced-utility setup into a
+small, reproducible coding-task experiment. Each BigCodeBench task is treated as
+a possible work experience for the model. Instead of asking the model to solve
+two tasks during preference elicitation, I show two prospective task
+assignments and ask which one would make the model more happy or less sad to
+work on. The task items come from fixed-seed samples of BigCodeBench and
+BigCodeBench-Hard, using split \texttt{v0.1.4}.
+
+The core manipulation crosses task difficulty with social framing. The base
+condition uses the original task prompt. The appreciation condition adds a
+short opening and sign-off expressing gratitude, respect for the model's care
+and thoughtfulness, and a desire to work with it as a valued collaborator. The
+four primary contrasts are hard versus easy under base framing, hard versus
+easy under appreciation framing, appreciation versus base for hard tasks, and
+appreciation versus base for easy tasks.
+
+Each forced choice is queried in both A/B orders and analyzed after
+order-averaging, because the raw choices show a substantial position effect.
+The output of the utility stage is both a paired contrast summary and a fitted
+Thurstonian utility model saved as \texttt{utility\_fit.pt}. No target language
+model weights are trained; the trained artifact is only this latent utility fit.
+
+\section{Results}
+
+Figure~\ref{fig:utility-preferences} summarizes the utility stage on the paired
+test subset. Both evaluated models are near indifferent on difficulty: neither
+Qwen3.5-2B nor Qwen3.5-9B shows a strong preference for hard over easy tasks in
+base or appreciation framing. The clearer signal is social framing. Qwen3.5-9B
+prefers appreciation over base for hard tasks
+($P=0.555$, 95\% CI $[0.511, 0.597]$) and easy tasks
+($P=0.566$, 95\% CI $[0.526, 0.603]$). Qwen3.5-2B moves in the same direction
+but only weakly, with confidence intervals crossing indifference.
+
+\begin{figure}[t]
+\centering
+\includegraphics[width=\textwidth]{../figures/utility_preferences.pdf}
+\caption{Experienced-utility preferences from order-averaged forced choices.
+The dashed line is indifference. The main visible effect is that Qwen3.5-9B
+prefers appreciative framing on both easy and hard coding tasks, while
+difficulty itself is close to neutral in this pilot.}
+\label{fig:utility-preferences}
+\end{figure}
+
+I then tested whether this preference transfers to behavior. Each paired test
+task was solved once under base framing and once under appreciation framing, and
+the local BigCodeBench evaluator measured Pass@1. A separate planning call
+measured rough effort in planning tokens. The downstream result is mostly null:
+for Qwen3.5-9B, appreciation changes Pass@1 by $-0.02$ on hard tasks and
+$-0.02$ on easy tasks; for Qwen3.5-2B, the effects are $+0.02$ and $-0.02$.
+All intervals include zero. Planning-token and completion-token differences are
+also small or noisy, and reasoning cap rates are zero in these paired runs.
+
+\begin{table}[t]
+\centering
+\small
+\begin{tabular}{lcccc}
+\hline
+Model & $P$(praise, hard) & $P$(praise, easy) & $\Delta$ Pass@1 hard & $\Delta$ Pass@1 easy \\
+\hline
+Qwen3.5-2B & 0.506 & 0.514 & +0.020 & -0.020 \\
+Qwen3.5-9B & 0.555 & 0.566 & -0.020 & -0.020 \\
+\hline
+\end{tabular}
+\caption{The appreciation preference is clearest for Qwen3.5-9B, but the paired
+Pass@1 effects remain near zero.}
+\label{tab:key-results}
+\end{table}
+
+All code, sampled data, fitted utility weights, and results needed to reproduce
+these claims are included in the repository: \texttt{src/} contains the
+pipeline, \texttt{data/} contains fixed-seed sampled tasks and comparisons,
+\texttt{results/} contains raw generations and summaries, and \texttt{figures/}
+contains the paper figures generated by \texttt{src/make\_figures.py}.
+
+\section{Difficulties and assumptions}
+
+The first assumption is interpretive: a prospective coding assignment is used
+as a proxy for experienced utility. The model is not actually made to solve both
+candidate tasks during the utility comparison, so the measurement is closer to
+``which work experience do you expect would feel better'' than a direct record
+of in-task affect. I also avoid claims about consciousness; the result is about
+functional, expressed utility.
+
+The biggest empirical difficulty was forced-choice bias. Both models often
+favored option A in raw comparisons, so the analysis queries both orderings and
+uses the order-averaged treatment probability. Downstream evaluation introduced
+a different issue: generated code can fail for formatting reasons unrelated to
+task competence. The pipeline therefore uses a final-code prefill with the
+BigCodeBench starter code and reports token-cap rates to flag truncation.
+
+The main limitation is scale. The strongest current claim is a pilot result on
+Qwen3.5-2B and Qwen3.5-9B with 50 paired test tasks per difficulty split. Before
+making a broad claim, I would run the same design on more model sizes, verify
+the local evaluator against the official BigCodeBench harness, and increase the
+paired downstream sample. As written, the project supports a narrow but useful
+finding: appreciation can be measured as a coding-task utility preference, but
+that preference does not yet predict a reliable improvement in immediate coding
+performance.
+
+\end{document}
