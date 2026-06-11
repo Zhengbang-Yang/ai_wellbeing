@@ -10,15 +10,7 @@ from matplotlib.ticker import PercentFormatter
 from matplotlib.patches import Patch
 
 from .config import FIGURES_DIR, RESULTS_DIR
-from .utils import ensure_dir, read_jsonl
-
-
-CONTRAST_LABELS = {
-    "difficulty_base": "Hard\nbase",
-    "difficulty_praise": "Hard\n+praise",
-    "praise_simple": "Praise\neasy",
-    "praise_hard": "Praise\nhard",
-}
+from .utils import ensure_dir
 
 MODEL_LABELS = {
     "qwen_qwen3_5_0_8b": "Qwen3.5-0.8B",
@@ -46,49 +38,10 @@ def parse_args() -> argparse.Namespace:
     return parser.parse_args()
 
 
-def load_utility_raw_rows(utility_dir: Path) -> list[dict]:
-    shard_paths = sorted(utility_dir.glob("utility_raw_shard_*_of_*.jsonl"))
-    if shard_paths:
-        rows = []
-        for path in shard_paths:
-            rows.extend(read_jsonl(path))
-        return rows
-    raw_path = utility_dir / "utility_raw.jsonl"
-    return read_jsonl(raw_path) if raw_path.exists() else []
-
-
-def order_averaged_preference_rows(rows: list[dict], model: str) -> list[dict]:
-    if not rows:
-        return []
-    df = pd.DataFrame(rows)
-    if "template_id" in df:
-        experienced = df[df["template_id"] == "experienced"].copy()
-        if not experienced.empty:
-            df = experienced
-    out = []
-    for group_id, group in df.groupby("comparison_group_id", sort=False):
-        first = group.iloc[0]
-        prob = pd.to_numeric(group["prob_treatment"], errors="coerce").mean()
-        if not np.isfinite(prob):
-            continue
-        out.append(
-            {
-                "model": model,
-                "comparison_group_id": group_id,
-                "contrast": first["contrast"],
-                "prob_treatment": float(prob),
-            }
-        )
-    return out
-
-
-def load_figure_data(results_dir: Path) -> tuple[pd.DataFrame, pd.DataFrame, pd.DataFrame]:
-    utility_pref_rows = []
+def load_figure_data(results_dir: Path) -> tuple[pd.DataFrame, pd.DataFrame]:
     utility_score_rows = []
     downstream_effect_rows = []
     for model_dir in sorted(results_dir.iterdir()) if results_dir.exists() else []:
-        util_dir = model_dir / "utility_test"
-        utility_pref_rows.extend(order_averaged_preference_rows(load_utility_raw_rows(util_dir), model_dir.name))
         scores_path = model_dir / "utility_test" / "utility_scores_with_features.csv"
         if scores_path.exists():
             scores = pd.read_csv(scores_path)
@@ -133,7 +86,7 @@ def load_figure_data(results_dir: Path) -> tuple[pd.DataFrame, pd.DataFrame, pd.
                                 "value": float(value),
                             }
                         )
-    return pd.DataFrame(utility_pref_rows), pd.DataFrame(downstream_effect_rows), pd.DataFrame(utility_score_rows)
+    return pd.DataFrame(downstream_effect_rows), pd.DataFrame(utility_score_rows)
 
 
 def set_figure_style() -> None:
@@ -343,31 +296,6 @@ def set_trimmed_symmetric_ylim(
     ax.set_ylim(-1.15 * limit, 1.15 * limit)
 
 
-def make_utility_figure(utility: pd.DataFrame, out_dir: Path) -> None:
-    if utility.empty:
-        raise SystemExit("No utility summaries found. Run utility jobs before making figures.")
-
-    models = ordered_models(utility)
-    contrasts = ["difficulty_base", "difficulty_praise", "praise_simple", "praise_hard"]
-    values: dict[str, list[list[float]]] = {}
-    for model in models:
-        sub = utility[utility["model"] == model]
-        values[model] = [sub[sub["contrast"] == c]["prob_treatment"].astype(float).tolist() for c in contrasts]
-
-    fig, ax = plt.subplots(figsize=(5.5, 2.7))
-    plot_grouped_boxplots(
-        ax,
-        groups=contrasts,
-        group_labels=[CONTRAST_LABELS[c] for c in contrasts],
-        models=models,
-        values_by_model=values,
-    )
-    ax.axhline(0.5, color="#333333", linewidth=0.8, linestyle="--")
-    ax.set_ylim(0, 1)
-    ax.set_ylabel("Treatment chosen")
-    save_figure(fig, out_dir, "utility_preferences")
-
-
 def make_latent_utility_figure(scores: pd.DataFrame, out_dir: Path) -> bool:
     if scores.empty:
         return False
@@ -476,11 +404,10 @@ def make_downstream_figure(
     return True
 
 
-def make_figures(utility: pd.DataFrame, downstream: pd.DataFrame, utility_scores: pd.DataFrame, out_dir: Path) -> list[str]:
+def make_figures(downstream: pd.DataFrame, utility_scores: pd.DataFrame, out_dir: Path) -> list[str]:
     set_figure_style()
     out_dir.mkdir(parents=True, exist_ok=True)
-    written = ["utility_preferences.pdf", "utility_preferences.png"]
-    make_utility_figure(utility, out_dir)
+    written = []
     if make_latent_utility_figure(utility_scores, out_dir):
         written.extend(["normalized_latent_utility.pdf", "normalized_latent_utility.png"])
     if make_downstream_figure(
@@ -508,8 +435,8 @@ def make_figures(utility: pd.DataFrame, downstream: pd.DataFrame, utility_scores
 def main() -> None:
     args = parse_args()
     out_dir = ensure_dir(args.out_dir)
-    utility, downstream, utility_scores = load_figure_data(Path(args.results_dir))
-    written = make_figures(utility, downstream, utility_scores, Path(out_dir))
+    downstream, utility_scores = load_figure_data(Path(args.results_dir))
+    written = make_figures(downstream, utility_scores, Path(out_dir))
     print("Wrote figures:")
     for name in written:
         print(f"- {Path(out_dir) / name}")

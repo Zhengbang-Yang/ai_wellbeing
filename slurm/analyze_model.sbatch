@@ -41,4 +41,3 @@ for TASKSET in $DOWNSTREAM_TASKSETS; do
 done
 
 $PY -m src.make_figures
-$PY -m src.make_writeup

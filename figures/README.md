@@ -6,10 +6,9 @@ Run:
 python -m src.make_figures
 ```
 
-after utility and downstream summaries exist. The script writes four simple
+after utility and downstream summaries exist. The script writes three simple
 figures instead of one crowded panel:
 
-- `utility_preferences.pdf/png`
 - `normalized_latent_utility.pdf/png`
 - `praise_pass1.pdf/png`
 - `praise_effort.pdf/png`

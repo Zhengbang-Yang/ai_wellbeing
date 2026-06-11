@@ -39,5 +39,4 @@ done
 
 if [[ "$MAKE_FIGURES" == "1" ]]; then
   "$PY" -m src.make_figures
-  "$PY" -m src.make_writeup
 fi
