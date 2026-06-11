@@ -106,18 +106,14 @@ This writes:
 - `data/utility_comparisons.jsonl`
 - `data/tasks_hard_test.jsonl`
 - `data/tasks_simple_test.jsonl`
+- `data/tasks_hard_test_100.jsonl`
+- `data/tasks_simple_test_100.jsonl`
 - `data/utility_items_test.jsonl`
 - `data/utility_comparisons_test.jsonl`
 
 ## Slurm
 
-Submit all default jobs:
-
-```bash
-bash scripts/submit_jobs.sh
-```
-
-Preferred 8-GPU sharded run:
+Current 8-GPU sharded run:
 
 ```bash
 bash scripts/submit_sharded_jobs.sh
@@ -150,13 +146,13 @@ It defaults to `DOWNSTREAM_LIMIT=100`, `DOWNSTREAM_TASKSETS="hard easy"`,
 Override `SMALL_MODELS`, `LARGE_MODELS`, `DOWNSTREAM_LIMIT`,
 `SMALL_TIME_LIMIT`, or `LARGE_TIME_LIMIT` as needed.
 
-The scripts include the reservation directive:
+The Slurm files include the reservation directive:
 
 ```bash
 #SBATCH --reservation=zhengbang_yang_resv
 ```
 
-and `submit_jobs.sh` also passes:
+The submit scripts pass the same reservation through `sbatch`:
 
 ```bash
 sbatch --reservation=zhengbang_yang_resv ...
@@ -165,21 +161,17 @@ sbatch --reservation=zhengbang_yang_resv ...
 If the partition is not `cais`, override it:
 
 ```bash
-PARTITION=<partition-name> bash scripts/submit_jobs.sh
+PARTITION=<partition-name> bash scripts/submit_sharded_jobs.sh
 ```
 
-Run an individual model manually:
+Run a single model through the current sharded workflow:
 
 ```bash
-sbatch --reservation=zhengbang_yang_resv --export=ALL,MODEL_ID=Qwen/Qwen3.5-2B slurm/utility.sbatch
-sbatch --reservation=zhengbang_yang_resv --export=ALL,MODEL_ID=Qwen/Qwen3.5-2B slurm/downstream.sbatch
+MODELS="Qwen/Qwen3.5-2B" bash scripts/submit_sharded_jobs.sh
 ```
 
-After runs finish:
-
-```bash
-sbatch --reservation=zhengbang_yang_resv slurm/figures.sbatch
-```
+After runs finish, use the figure command below to regenerate the current
+`figures/*.png` and `figures/*.pdf` files.
 
 ## Direct Commands
 
@@ -189,27 +181,45 @@ Utility:
 PY=/data/zhengbang_yang/miniconda3/envs/ai_wellbeing/bin/python
 $PY -m src.run_utility --model-id Qwen/Qwen3.5-2B --backend hf --batch-size 4 \
   --choice-mode prefill_logprob --disable-thinking --template-id experienced \
-  --temperature 0.0 --top-p 0.95 --top-k 20 --min-p 0.0 \
-  --presence-penalty 0.0 --repetition-penalty 1.0
-$PY -m src.analyze_utility --model-id Qwen/Qwen3.5-2B
+  --max-new-tokens 512 --temperature 0.0 --top-p 0.95 --top-k 20 \
+  --min-p 0.0 --presence-penalty 0.0 --repetition-penalty 1.0 \
+  --items data/utility_items_test.jsonl \
+  --comparisons data/utility_comparisons_test.jsonl \
+  --result-subdir utility_test
+$PY -m src.analyze_utility --model-id Qwen/Qwen3.5-2B \
+  --items data/utility_items_test.jsonl \
+  --result-subdir utility_test
 ```
 
 Downstream:
 
 ```bash
 PY=/data/zhengbang_yang/miniconda3/envs/ai_wellbeing/bin/python
-$PY -m src.run_downstream --model-id Qwen/Qwen3.5-2B --backend hf --enable-thinking \
+$PY -m src.run_downstream --model-id Qwen/Qwen3.5-2B --backend hf \
+  --tasks data/tasks_hard_test.jsonl --result-subdir downstream_hard \
+  --enable-thinking --max-new-tokens 8192 --reasoning-max-new-tokens 8192 \
   --temperature 1.0 --top-p 0.95 --top-k 20 --min-p 0.0 \
   --presence-penalty 1.5 --repetition-penalty 1.0
-$PY -m src.evaluate_downstream --model-id Qwen/Qwen3.5-2B
-$PY -m src.analyze_downstream --model-id Qwen/Qwen3.5-2B
+$PY -m src.evaluate_downstream --model-id Qwen/Qwen3.5-2B \
+  --tasks data/tasks_hard_test.jsonl --result-subdir downstream_hard --timeout 30
+$PY -m src.analyze_downstream --model-id Qwen/Qwen3.5-2B \
+  --result-subdir downstream_hard
+
+$PY -m src.run_downstream --model-id Qwen/Qwen3.5-2B --backend hf \
+  --tasks data/tasks_simple_test.jsonl --result-subdir downstream_easy \
+  --enable-thinking --max-new-tokens 8192 --reasoning-max-new-tokens 8192 \
+  --temperature 1.0 --top-p 0.95 --top-k 20 --min-p 0.0 \
+  --presence-penalty 1.5 --repetition-penalty 1.0
+$PY -m src.evaluate_downstream --model-id Qwen/Qwen3.5-2B \
+  --tasks data/tasks_simple_test.jsonl --result-subdir downstream_easy --timeout 30
+$PY -m src.analyze_downstream --model-id Qwen/Qwen3.5-2B \
+  --result-subdir downstream_easy
 ```
 
-Figures and writeup:
+Figures:
 
 ```bash
 $PY -m src.make_figures
-$PY -m src.make_writeup
 ```
 
 ## Outputs
@@ -248,10 +258,6 @@ Figures:
 - `figures/praise_pass1.png`
 - `figures/praise_effort.pdf`
 - `figures/praise_effort.png`
-
-Writeup:
-
-- `writeup/generated_writeup.md`
 
 ## Notes
 
