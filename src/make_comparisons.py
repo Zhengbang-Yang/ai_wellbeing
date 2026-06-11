@@ -27,7 +27,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument(
         "--test-limit",
         type=int,
-        default=50,
+        default=100,
         help="Also write paired hard/easy test-set utility files using the first N fixed pairs.",
     )
     return parser.parse_args()

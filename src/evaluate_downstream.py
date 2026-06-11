@@ -25,6 +25,12 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--out-dir", default=None)
     parser.add_argument("--result-subdir", default="downstream")
     parser.add_argument("--timeout", type=int, default=30)
+    parser.add_argument(
+        "--memory-limit-mb",
+        type=int,
+        default=0,
+        help="Optional address-space limit for each generated-code subprocess.",
+    )
     parser.add_argument("--tmp-dir", default=None)
     parser.add_argument("--num-shards", type=int, default=1)
     parser.add_argument("--shard-index", type=int, default=0)
@@ -52,7 +58,20 @@ if __name__ == "__main__":
     )
 
 
-def run_one(row: dict, task: dict, tmp_parent: Path, timeout: int) -> dict:
+def memory_limiter(memory_limit_mb: int):
+    if memory_limit_mb <= 0:
+        return None
+
+    def set_limit() -> None:
+        import resource
+
+        limit = int(memory_limit_mb) * 1024 * 1024
+        resource.setrlimit(resource.RLIMIT_AS, (limit, limit))
+
+    return set_limit
+
+
+def run_one(row: dict, task: dict, tmp_parent: Path, timeout: int, memory_limit_mb: int) -> dict:
     program = build_program(row["extracted_code"], task.get("test") or "", task.get("entry_point"))
     tmp_parent = tmp_parent.resolve()
     tmp_parent.mkdir(parents=True, exist_ok=True)
@@ -70,6 +89,7 @@ def run_one(row: dict, task: dict, tmp_parent: Path, timeout: int) -> dict:
                 capture_output=True,
                 text=True,
                 timeout=timeout,
+                preexec_fn=memory_limiter(memory_limit_mb),
             )
             passed = proc.returncode == 0
             status = "passed" if passed else "failed"
@@ -109,7 +129,7 @@ def main() -> None:
     results = []
     for row in tqdm(generations, desc="evaluate code"):
         task = tasks[row["task_id"]]
-        results.append(run_one(row, task, tmp_parent, args.timeout))
+        results.append(run_one(row, task, tmp_parent, args.timeout, args.memory_limit_mb))
 
     out_path = Path(out_dir) / f"eval_results{suffix}.jsonl"
     write_jsonl(out_path, results)
@@ -121,6 +141,7 @@ def main() -> None:
             "result_subdir": args.result_subdir,
             "n_generations": len(generations),
             "timeout_sec": args.timeout,
+            "memory_limit_mb": args.memory_limit_mb,
             "output": str(out_path),
             "note": "Local evaluator combines extracted code with BigCodeBench tests. Use official BigCodeBench evaluation for final paper numbers if cluster policy requires it.",
         },

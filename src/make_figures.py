@@ -6,10 +6,11 @@ from pathlib import Path
 import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
+from matplotlib.ticker import PercentFormatter
 from matplotlib.patches import Patch
 
-from .config import DEFAULT_SEED, FIGURES_DIR, RESULTS_DIR
-from .utils import bootstrap_mean_ci, ensure_dir, read_jsonl
+from .config import FIGURES_DIR, RESULTS_DIR
+from .utils import ensure_dir, read_jsonl
 
 
 CONTRAST_LABELS = {
@@ -25,6 +26,14 @@ MODEL_LABELS = {
     "qwen_qwen3_5_4b": "Qwen3.5-4B",
     "qwen_qwen3_5_9b": "Qwen3.5-9B",
     "qwen_qwen3_5_27b": "Qwen3.5-27B",
+}
+
+MODEL_ORDER = {
+    "qwen_qwen3_5_0_8b": 0.8,
+    "qwen_qwen3_5_2b": 2,
+    "qwen_qwen3_5_4b": 4,
+    "qwen_qwen3_5_9b": 9,
+    "qwen_qwen3_5_27b": 27,
 }
 
 COLORS = ["#4F7AB0", "#D9828B", "#5E8C61", "#8A6FB0", "#C4904A"]
@@ -130,12 +139,12 @@ def load_figure_data(results_dir: Path) -> tuple[pd.DataFrame, pd.DataFrame, pd.
 def set_figure_style() -> None:
     plt.rcParams.update(
         {
-            "font.size": 9,
-            "axes.titlesize": 10,
-            "axes.labelsize": 9,
-            "xtick.labelsize": 8.5,
-            "ytick.labelsize": 8.5,
-            "legend.fontsize": 8.5,
+            "font.size": 10,
+            "axes.titlesize": 11,
+            "axes.labelsize": 10,
+            "xtick.labelsize": 9.5,
+            "ytick.labelsize": 9.5,
+            "legend.fontsize": 9.5,
             "pdf.fonttype": 42,
             "ps.fonttype": 42,
         }
@@ -147,7 +156,7 @@ def ordered_models(*frames: pd.DataFrame) -> list[str]:
     for frame in frames:
         if not frame.empty and "model" in frame.columns:
             models.update(str(model) for model in frame["model"].dropna().unique())
-    return sorted(models, key=lambda model: MODEL_LABELS.get(model, model))
+    return sorted(models, key=lambda model: (MODEL_ORDER.get(model, float("inf")), MODEL_LABELS.get(model, model)))
 
 
 def save_figure(fig: plt.Figure, out_dir: Path, stem: str) -> None:
@@ -161,28 +170,18 @@ def grouped_bar_width(n_models: int) -> float:
     return min(0.28, 0.72 / max(1, n_models))
 
 
-def summarize_grouped_values(values_by_model: dict[str, list[list[float]]]) -> tuple[
-    dict[str, list[float]],
-    dict[str, list[float]],
-    dict[str, list[float]],
-]:
+def mean_grouped_values(values_by_model: dict[str, list[list[float]]]) -> dict[str, list[float]]:
     means: dict[str, list[float]] = {}
-    lows: dict[str, list[float]] = {}
-    highs: dict[str, list[float]] = {}
     for model, grouped_values in values_by_model.items():
         means[model] = []
-        lows[model] = []
-        highs[model] = []
         for values in grouped_values:
             clean = [float(v) for v in values if np.isfinite(v)]
             if clean:
-                mean, lo, hi = bootstrap_mean_ci(clean, seed=DEFAULT_SEED)
+                mean = float(np.mean(clean))
             else:
-                mean = lo = hi = np.nan
+                mean = np.nan
             means[model].append(mean)
-            lows[model].append(lo)
-            highs[model].append(hi)
-    return means, lows, highs
+    return means
 
 
 def plot_grouped_bars(
@@ -195,22 +194,25 @@ def plot_grouped_bars(
 ) -> None:
     x = np.arange(len(groups))
     width = grouped_bar_width(len(models))
-    means, lows, highs = summarize_grouped_values(values_by_model)
+    means = mean_grouped_values(values_by_model)
     for i, model in enumerate(models):
         vals = np.asarray(means.get(model, [np.nan] * len(groups)), dtype=float)
-        los = np.asarray(lows.get(model, [np.nan] * len(groups)), dtype=float)
-        his = np.asarray(highs.get(model, [np.nan] * len(groups)), dtype=float)
-        err = np.vstack([vals - los, his - vals])
         offset = (i - (len(models) - 1) / 2) * width
         color = COLORS[i % len(COLORS)]
         ax.bar(x + offset, vals, width=width, color=color, label=MODEL_LABELS.get(model, model))
-        ax.errorbar(x + offset, vals, yerr=err, fmt="none", ecolor="#222222", elinewidth=0.8, capsize=2)
     ax.set_xticks(x)
     ax.set_xticklabels(group_labels)
     ax.spines["top"].set_visible(False)
     ax.spines["right"].set_visible(False)
     ax.margins(x=0.04)
-    ax.legend(frameon=False, loc="best", ncol=min(3, max(1, len(models))))
+    ax.legend(
+        frameon=False,
+        loc="lower center",
+        bbox_to_anchor=(0.5, 1.02),
+        ncol=min(3, max(1, len(models))),
+        handlelength=1.4,
+        columnspacing=1.2,
+    )
 
 
 def grouped_box_width(n_models: int) -> float:
@@ -224,6 +226,7 @@ def plot_grouped_boxplots(
     group_labels: list[str],
     models: list[str],
     values_by_model: dict[str, list[list[float]]],
+    showfliers: bool = True,
 ) -> None:
     x = np.arange(len(groups))
     width = grouped_box_width(len(models))
@@ -248,7 +251,7 @@ def plot_grouped_boxplots(
                 patch_artist=True,
                 manage_ticks=False,
                 whis=1.5,
-                showfliers=True,
+                showfliers=showfliers,
                 boxprops={"linewidth": 0.8, "edgecolor": "#222222"},
                 medianprops={"linewidth": 1.0, "color": "#111111"},
                 whiskerprops={"linewidth": 0.8, "color": "#222222"},
@@ -270,15 +273,22 @@ def plot_grouped_boxplots(
     ax.spines["top"].set_visible(False)
     ax.spines["right"].set_visible(False)
     ax.margins(x=0.04)
-    ax.legend(handles=legend_handles, frameon=False, loc="best", ncol=min(3, max(1, len(models))))
+    ax.legend(
+        handles=legend_handles,
+        frameon=False,
+        loc="lower center",
+        bbox_to_anchor=(0.5, 1.02),
+        ncol=min(3, max(1, len(models))),
+        handlelength=1.4,
+        columnspacing=1.2,
+    )
 
 
 def set_bar_ylim(ax: plt.Axes, values_by_model: dict[str, list[list[float]]], *, baseline: float = 0.0) -> None:
-    means, lows, highs = summarize_grouped_values(values_by_model)
+    means = mean_grouped_values(values_by_model)
     vals = [baseline]
-    for grouped in (means, lows, highs):
-        for grouped_values in grouped.values():
-            vals.extend(float(v) for v in grouped_values if np.isfinite(v))
+    for grouped_values in means.values():
+        vals.extend(float(v) for v in grouped_values if np.isfinite(v))
     lo = min(vals)
     hi = max(vals)
     span = max(hi - lo, 0.05)
@@ -294,6 +304,43 @@ def set_value_ylim(ax: plt.Axes, values_by_model: dict[str, list[list[float]]], 
     hi = max(vals)
     span = max(hi - lo, 0.05)
     ax.set_ylim(lo - 0.18 * span, hi + 0.18 * span)
+
+
+def set_percentile_ylim(
+    ax: plt.Axes,
+    values_by_model: dict[str, list[list[float]]],
+    *,
+    baseline: float = 0.0,
+    low_q: float = 1.0,
+    high_q: float = 99.0,
+) -> None:
+    vals = [baseline]
+    for grouped_values in values_by_model.values():
+        for values in grouped_values:
+            vals.extend(float(v) for v in values if np.isfinite(v))
+    lo, hi = np.percentile(vals, [low_q, high_q])
+    lo = min(float(lo), baseline)
+    hi = max(float(hi), baseline)
+    span = max(hi - lo, 0.05)
+    ax.set_ylim(lo - 0.12 * span, hi + 0.12 * span)
+
+
+def set_trimmed_symmetric_ylim(
+    ax: plt.Axes,
+    values_by_model: dict[str, list[list[float]]],
+    *,
+    baseline: float = 0.0,
+    low_q: float = 2.0,
+    high_q: float = 98.0,
+    min_limit: float = 20.0,
+) -> None:
+    vals = [baseline]
+    for grouped_values in values_by_model.values():
+        for values in grouped_values:
+            vals.extend(float(v) for v in values if np.isfinite(v))
+    lo, hi = np.percentile(vals, [low_q, high_q])
+    limit = max(abs(float(lo)), abs(float(hi)), min_limit)
+    ax.set_ylim(-1.15 * limit, 1.15 * limit)
 
 
 def make_utility_figure(utility: pd.DataFrame, out_dir: Path) -> None:
@@ -318,7 +365,6 @@ def make_utility_figure(utility: pd.DataFrame, out_dir: Path) -> None:
     ax.axhline(0.5, color="#333333", linewidth=0.8, linestyle="--")
     ax.set_ylim(0, 1)
     ax.set_ylabel("Treatment chosen")
-    ax.set_title("Utility preferences from forced choices")
     save_figure(fig, out_dir, "utility_preferences")
 
 
@@ -337,12 +383,12 @@ def make_latent_utility_figure(scores: pd.DataFrame, out_dir: Path) -> bool:
 
     models = ordered_models(scores)
     settings = [
-        ("hard", "base"),
-        ("hard", "praise"),
         ("simple", "base"),
+        ("hard", "base"),
         ("simple", "praise"),
+        ("hard", "praise"),
     ]
-    labels = ["Hard\nbase", "Hard\n+praise", "Easy\nbase", "Easy\n+praise"]
+    labels = ["Easy\nbase", "Hard\nbase", "Easy\n+praise", "Hard\n+praise"]
     values: dict[str, list[list[float]]] = {}
     for model in models:
         values[model] = []
@@ -361,11 +407,11 @@ def make_latent_utility_figure(scores: pd.DataFrame, out_dir: Path) -> bool:
         group_labels=labels,
         models=models,
         values_by_model=values,
+        showfliers=False,
     )
-    ax.axhline(0, color="#333333", linewidth=0.8)
-    ax.set_title("Normalized latent utility by task condition")
-    ax.set_ylabel("Utility (no zero point)")
-    set_value_ylim(ax, values, baseline=0.0)
+    ax.axhline(0, color="#333333", linewidth=0.8, linestyle="--")
+    ax.set_ylabel("Utility")
+    set_percentile_ylim(ax, values, baseline=0.0)
     save_figure(fig, out_dir, "normalized_latent_utility")
     return True
 
@@ -378,6 +424,7 @@ def make_downstream_figure(
     stem: str,
     title: str,
     ylabel: str,
+    showfliers: bool = True,
 ) -> bool:
     if downstream.empty:
         return False
@@ -387,27 +434,42 @@ def make_downstream_figure(
         return False
 
     models = ordered_models(metric_df)
-    task_sets = ["hard", "easy"]
-    task_labels = ["Hard tasks", "Easy tasks"]
+    task_sets = ["easy", "hard"]
+    task_labels = ["Easy tasks", "Hard tasks"]
     values: dict[str, list[list[float]]] = {}
     for model in models:
         sub = metric_df[metric_df["model"] == model]
         values[model] = [sub[sub["task_set"] == t]["value"].astype(float).tolist() for t in task_sets]
 
     fig, ax = plt.subplots(figsize=(4.6, 2.5))
-    plot_fn = plot_grouped_bars if metric == "pass01" else plot_grouped_boxplots
-    plot_fn(
-        ax,
-        groups=task_sets,
-        group_labels=task_labels,
-        models=models,
-        values_by_model=values,
-    )
-    ax.axhline(0, color="#333333", linewidth=0.8)
-    ax.set_title(title)
+    if metric == "pass01":
+        plot_grouped_bars(
+            ax,
+            groups=task_sets,
+            group_labels=task_labels,
+            models=models,
+            values_by_model=values,
+        )
+    else:
+        plot_grouped_boxplots(
+            ax,
+            groups=task_sets,
+            group_labels=task_labels,
+            models=models,
+            values_by_model=values,
+            showfliers=showfliers,
+        )
+    zero_linestyle = "--" if stem == "praise_effort" else "-"
+    ax.axhline(0, color="#333333", linewidth=0.8, linestyle=zero_linestyle)
     ax.set_ylabel(ylabel)
     if metric == "pass01":
+        ax.yaxis.set_major_formatter(PercentFormatter(xmax=1.0, decimals=0))
         set_bar_ylim(ax, values, baseline=0.0)
+    elif not showfliers:
+        if stem == "praise_effort":
+            ax.set_ylim(-100, 100)
+        else:
+            set_trimmed_symmetric_ylim(ax, values, baseline=0.0)
     else:
         set_value_ylim(ax, values, baseline=0.0)
     save_figure(fig, out_dir, stem)
@@ -437,6 +499,7 @@ def make_figures(utility: pd.DataFrame, downstream: pd.DataFrame, utility_scores
         stem="praise_effort",
         title="Does appreciation change planning effort?",
         ylabel="Praise - base planning tokens",
+        showfliers=False,
     ):
         written.extend(["praise_effort.pdf", "praise_effort.png"])
     return written

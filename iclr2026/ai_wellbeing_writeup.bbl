@@ -1,0 +1,19 @@
+\begin{thebibliography}{2}
+\providecommand{\natexlab}[1]{#1}
+\providecommand{\url}[1]{\texttt{#1}}
+\expandafter\ifx\csname urlstyle\endcsname\relax
+  \providecommand{\doi}[1]{doi: #1}\else
+  \providecommand{\doi}{doi: \begingroup \urlstyle{rm}\Url}\fi
+
+\bibitem[Ren et~al.(2026)Ren, Li, Mazeika, Zhang, Orlovskiy, Tamirisa, Mo, Nguyen, Phan, Basart, Meek, Mehta, Ingebretsen, Blair, Adewinmbi, Gatti, Khoja, Hausenloy, Kim, and Hendrycks]{ren2026aiwellbeing}
+Richard Ren, Kunyang Li, Mantas Mazeika, Wenyu Zhang, Yury Orlovskiy, Rishub Tamirisa, Wenjie~Jacky Mo, Judy Nguyen, Long Phan, Steven Basart, Austin Meek, Aditya Mehta, Oliver Ingebretsen, Alice Blair, Brianna Adewinmbi, Alice Gatti, Adam Khoja, Jason Hausenloy, Devin Kim, and Dan Hendrycks.
+\newblock Ai wellbeing: Measuring and improving the functional pleasure and pain of ais.
+\newblock 2026.
+
+\bibitem[Zhuo et~al.(2025)Zhuo, Chien, Chim, Hu, Yu, Widyasari, Yusuf, Zhan, He, Paul, Brunner, GONG, Hoang, Zebaze, Hong, Li, Kaddour, Xu, Zhang, Yadav, Jain, Gu, Cheng, Liu, Liu, Wang, Lo, Hui, Muennighoff, Fried, Du, de~Vries, and Werra]{zhuo2025bigcodebench}
+Terry~Yue Zhuo, Vu~Minh Chien, Jenny Chim, Han Hu, Wenhao Yu, Ratnadira Widyasari, Imam Nur~Bani Yusuf, Haolan Zhan, Junda He, Indraneil Paul, Simon Brunner, Chen GONG, James Hoang, Armel~Randy Zebaze, Xiaoheng Hong, Wen-Ding Li, Jean Kaddour, Ming Xu, Zhihan Zhang, Prateek Yadav, Naman Jain, Alex Gu, Zhoujun Cheng, Jiawei Liu, Qian Liu, Zijian Wang, David Lo, Binyuan Hui, Niklas Muennighoff, Daniel Fried, Xiaoning Du, Harm de~Vries, and Leandro~Von Werra.
+\newblock Bigcodebench: Benchmarking code generation with diverse function calls and complex instructions.
+\newblock In \emph{The Thirteenth International Conference on Learning Representations}, 2025.
+\newblock URL \url{https://openreview.net/forum?id=YrycTjllL0}.
+
+\end{thebibliography}

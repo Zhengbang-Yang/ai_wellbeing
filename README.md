@@ -1,8 +1,8 @@
-# AI Wellbeing: Coding Task Utility Preferences
+# AI Wellbeing: Coding Task Utility Scores
 
-This repo studies whether language models prefer easy or hard programming tasks,
-and whether gratitude/appreciation language changes those preferences and
-downstream behavior.
+This repo studies the latent utility scores language models assign to easy and
+hard programming-task experiences, and whether gratitude/appreciation language
+changes those scores and downstream behavior.
 
 The design adapts the experienced-utility prompt from the AI Wellbeing paper:
 instead of asking which conversation made the model more happy / less sad, we
@@ -21,21 +21,25 @@ Dataset:
 
 Utility experiment:
 
-- 2 x 2 factorial items: `difficulty in {simple, hard}` crossed with
-  `framing in {base, praise}`. The `praise` condition wraps the task with a
-  brief gratitude/appreciation opening and warm sign-off that treat the model as
-  a valued collaborator, following the AI Wellbeing finding that user thanks and
-  kindness raise experienced utility.
-- Main contrasts:
-  - `difficulty_base`: hard/base vs simple/base.
-  - `difficulty_praise`: hard/praise vs simple/praise.
-  - `praise_hard`: hard/praise vs hard/base.
-  - `praise_simple`: simple/praise vs simple/base.
-- Every factorial comparison is run in both A/B orders under the single
+- Utility-scored items: each sampled task is represented under its observed
+  difficulty (`simple` or `hard`) and each framing (`base` or `praise`). The
+  current test set contains 100 simple tasks and 100 hard tasks, producing 400
+  utility-scored task/framing items.
+- The main utility analysis fits a Thurstonian latent-utility model to paired
+  A/B choices and reports normalized utility scores (`utility_mu`) for:
+  - simple/base
+  - hard/base
+  - simple/praise
+  - hard/praise
+- The primary utility figure is `figures/normalized_latent_utility.png`, which
+  plots these normalized latent utility scores. The treatment-probability
+  summaries in `utility_summary.csv` remain diagnostic checks of the paired
+  comparisons rather than the primary utility result.
+- Every paired comparison is run in both A/B orders under the single
   experienced-utility template, then analyzed after averaging the two orders to
   reduce A/B position bias. Full-graph utility files can include extra random
-  edges for Thurstonian fitting; the current test-set run uses only the paired
-  factorial comparisons.
+  edges for Thurstonian fitting; the current 100-pair test-set run uses only the
+  paired task/framing comparisons.
 - Qwen utility choices use a forced-choice `Answer:` prefill and score the next
   token probabilities for `A` and `B`. This follows the utility-ranking forced
   choice setup while avoiding long task-solving traces during preference
@@ -43,7 +47,8 @@ Utility experiment:
 
 Downstream experiment:
 
-- Use the paired test subset of sampled hard tasks and sampled easy tasks.
+- Use the full paired test set: 100 sampled hard tasks and 100 sampled simple
+  tasks.
 - Generate one solution per task in `base` and `praise` conditions.
 - Evaluate Pass@1 using the included local BigCodeBench test runner.
 - Measure effort with a separate short reasoning/planning call under the same
@@ -120,20 +125,15 @@ bash scripts/submit_sharded_jobs.sh
 
 This runs each model as an 8-task Slurm array, one A100 per shard. The pipeline
 runs `Qwen/Qwen3.5-2B` first and then `Qwen/Qwen3.5-9B`, so it stays within an
-8-GPU budget. The current active run uses the first 50 fixed hard/simple pairs
-as the test subset. It runs utility only on that subset, then evaluates the
-praise effect downstream on both hard and easy tasks. The downstream planning
-and final-code calls both use 8192-token generation budgets.
-
-```bash
-DOWNSTREAM_LIMIT=50 bash scripts/submit_sharded_jobs.sh
-```
+8-GPU budget. The current active run uses the full 100 fixed hard/simple pairs
+as the test set. It runs utility on that full test set, then evaluates the
+praise effect downstream on all 100 hard and all 100 simple tasks. The
+downstream planning and final-code calls both use 8192-token generation budgets.
 
 The sharded submitter can run arbitrary model lists and resource shapes:
 
 ```bash
-MODELS="Qwen/Qwen3.5-0.8B Qwen/Qwen3.5-4B" DOWNSTREAM_LIMIT=50 \
-  bash scripts/submit_sharded_jobs.sh
+MODELS="Qwen/Qwen3.5-0.8B Qwen/Qwen3.5-4B" bash scripts/submit_sharded_jobs.sh
 ```
 
 For the proposed extended sweep, use:
@@ -144,10 +144,11 @@ bash scripts/submit_extended_sweep.sh
 
 By default this runs `Qwen/Qwen3.5-0.8B` and `Qwen/Qwen3.5-4B` as 8 shards with
 1 GPU per shard, then `Qwen/Qwen3.5-27B` as 4 shards with 2 GPUs per shard.
-It defaults to `DOWNSTREAM_LIMIT=50`, `DOWNSTREAM_TASKSETS="hard easy"`,
+It defaults to `DOWNSTREAM_LIMIT=100`, `DOWNSTREAM_TASKSETS="hard easy"`,
 `UTILITY_COMPARISONS=data/utility_comparisons_test.jsonl`,
 `REASONING_MAX_NEW_TOKENS=8192`, and `DOWNSTREAM_MAX_NEW_TOKENS=8192`.
-Override `SMALL_MODELS`, `LARGE_MODELS`, or `DOWNSTREAM_LIMIT` as needed.
+Override `SMALL_MODELS`, `LARGE_MODELS`, `DOWNSTREAM_LIMIT`,
+`SMALL_TIME_LIMIT`, or `LARGE_TIME_LIMIT` as needed.
 
 The scripts include the reservation directive:
 
@@ -216,12 +217,18 @@ $PY -m src.make_writeup
 For each model slug under `results/<model>/`:
 
 - `utility_test/utility_raw.jsonl`: raw generated A/B choices, optional logprobs,
-  and treatment probabilities for the paired test subset.
+  and treatment probabilities for the full 100-pair test set.
 - `utility_test/utility_raw_shard_XX_of_08.jsonl`: sharded version used by the
   preferred 8-GPU Slurm run; analysis scripts auto-merge these files.
-- `utility_test/utility_summary.csv`: main 2 x 2 contrast summaries.
+- `utility_test/utility_summary.csv`: diagnostic paired-comparison treatment
+  probability summaries.
 - `utility_test/order_consistency.csv`: whether both A/B orders imply the same winner.
-- `utility_test/bias_checks.csv`: correlations between fitted utility and task length/library features.
+- `utility_test/utility_scores.csv`: normalized latent utility scores for each
+  utility item.
+- `utility_test/utility_scores_with_features.csv`: normalized utility scores
+  joined to task difficulty, framing, and task features.
+- `utility_test/bias_checks.csv`: correlations between fitted utility score and
+  task length/library features.
 - `utility_test/utility_fit.pt`: trained Thurstonian utility weights.
 - `downstream_hard/generations.jsonl` and `downstream_easy/generations.jsonl`:
   raw generations and extracted code.
@@ -235,8 +242,6 @@ For each model slug under `results/<model>/`:
 
 Figures:
 
-- `figures/utility_preferences.pdf`
-- `figures/utility_preferences.png`
 - `figures/normalized_latent_utility.pdf`
 - `figures/normalized_latent_utility.png`
 - `figures/praise_pass1.pdf`
